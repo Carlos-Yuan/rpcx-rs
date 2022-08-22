@@ -12,9 +12,17 @@ use std::{
     net::{Shutdown, TcpListener, TcpStream},
 };
 
+#[cfg(not(target_os = "windows"))]
+use std::os::unix::io::{AsRawFd, RawFd};
+
+#[cfg(target_os = "windows")]
+use std::os::windows::io::{AsRawSocket,RawSocket};
+
+#[cfg(target_os = "windows")]
+type RawFd=RawSocket;
+
 use std::{
-    os::unix::io::{AsRawFd, RawFd},
-    thread,
+    thread
 };
 
 use scoped_threadpool::Pool;
@@ -23,6 +31,8 @@ pub mod plugin;
 pub use plugin::*;
 
 pub type RpcxFn = fn(&[u8], SerializeType) -> Result<Vec<u8>>;
+
+
 pub struct Server {
     pub addr: String,
     raw_fd: Option<RawFd>,
@@ -105,6 +115,7 @@ impl Server {
 
         Ok(())
     }
+    #[cfg(target_os = "windows")]
     pub fn start(&mut self) -> Result<()> {
         let addr = self
             .addr
@@ -113,7 +124,20 @@ impl Server {
 
         let listener = TcpListener::bind(&addr)?;
         println!("Listening on: {}", addr);
+        self.raw_fd = Some(listener.as_raw_socket());
 
+        self.start_with_listener(listener)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn start(&mut self) -> Result<()> {
+        let addr = self
+            .addr
+            .parse::<SocketAddr>()
+            .map_err(|err| Error::new(ErrorKind::Other, err))?;
+
+        let listener = TcpListener::bind(&addr)?;
+        println!("Listening on: {}", addr);
         self.raw_fd = Some(listener.as_raw_fd());
 
         self.start_with_listener(listener)
@@ -122,7 +146,7 @@ impl Server {
     pub fn close(&self) {
         if let Some(raw_fd) = self.raw_fd {
             unsafe {
-                libc::close(raw_fd);
+                libc::close(raw_fd as i32);
             }
         }
     }
