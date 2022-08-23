@@ -21,5 +21,6 @@ scoped_threadpool = "0.1.9"
 serde = { version = "1.0.98",features = ["derive"]}
 serde_json = "1.0.40" 
 rmp-serde = "0.15.5"
+tokio = {version = "1.17.0", features = ["full"]}
 rpcx_protocol =  { version = "0.3.0", path = "../rpcx_protocol" }
 rpcx_derive =  { version = "0.3.0", path = "../rpcx_derive" }
