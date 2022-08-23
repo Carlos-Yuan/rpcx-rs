@@ -30,7 +30,7 @@ use scoped_threadpool::Pool;
 pub mod plugin;
 pub use plugin::*;
 
-pub type RpcxFn = fn(&[u8], SerializeType) -> Result<Vec<u8>>;
+pub type RpcxFn =  fn(&[u8], SerializeType) -> Result<Vec<u8>>;
 
 
 pub struct Server {
@@ -139,7 +139,7 @@ impl Server {
         let listener = TcpListener::bind(&addr)?;
         println!("Listening on: {}", addr);
         self.raw_fd = Some(listener.as_raw_fd());
-
+        println!("{}",self.raw_fd);
         self.start_with_listener(listener)
     }
 
@@ -232,12 +232,12 @@ fn invoke_fn(stream: TcpStream, msg: Message, f: RpcxFn) {
 
 #[macro_export]
 macro_rules! register_func {
-    ($rpc_server:expr, $service_path:expr, $service_method:expr, $service_fn:expr, $meta:expr, $arg_type:ty, $reply_type:ty) => {{
+    ($rpc_server:expr, $tokio_rt:expr, $service_path:expr, $service_method:expr, $service_fn:expr, $meta:expr, $arg_type:ty, $reply_type:ty) => {{
         let f: RpcxFn = |x, st| {
             // TODO change ProtoArgs to $arg_typ
             let mut args: $arg_type = Default::default();
             args.from_slice(st, x)?;
-            let reply: $reply_type = $service_fn(args);
+            let reply: $reply_type=$tokio_rt.block_on($service_fn(args));
             reply.into_bytes(st)
         };
         $rpc_server.register_fn(
