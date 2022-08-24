@@ -250,7 +250,7 @@ macro_rules! register_func {
             let res = $tokio_rt.block_on($service_fn(args));
             match res{
                 Ok(res)=>{res.into_bytes(st)},
-                Err(e)=>{e.into()}
+                Err(e)=>{rpcx::Error::new(rpcx::ErrorKind::Server, e.to_string())}
             }
         };
         $rpc_server.register_fn(
