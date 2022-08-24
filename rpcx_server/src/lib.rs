@@ -242,7 +242,7 @@ fn invoke_fn(stream: TcpStream, msg: Message, f: RpcxFn) {
 
 #[macro_export]
 macro_rules! register_func {
-    ($rpc_server:expr, $tokio_rt:expr, $service_path:expr, $service_method:expr, $service_fn:expr, $meta:expr, $arg_type:ty, $reply_type:ty) => {{
+    ($rpc_server:expr, $tokio_rt:expr, $service_path:expr, $service_method:expr, $service_fn:expr, $meta:expr, $arg_type:ty) => {{
         let f: RpcxFn = |x, st| {
             // TODO change ProtoArgs to $arg_typ
             let mut args: $arg_type = Default::default();
@@ -250,7 +250,7 @@ macro_rules! register_func {
             let res = $tokio_rt.block_on($service_fn(args));
             match res{
                 Ok(res)=>{res.into_bytes(st)},
-                Err(e)=>{rpcx::Error::new(rpcx::ErrorKind::Server, e.to_string())}
+                Err(e)=>{Err(rpcx::Error::new(rpcx::ErrorKind::Server, e.to_string()))}
             }
         };
         $rpc_server.register_fn(
