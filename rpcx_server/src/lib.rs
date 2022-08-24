@@ -247,8 +247,11 @@ macro_rules! register_func {
             // TODO change ProtoArgs to $arg_typ
             let mut args: $arg_type = Default::default();
             args.from_slice(st, x)?;
-            let res = $tokio_rt.block_on($service_fn(args))?;
-            res.into_bytes(st)
+            let res = $tokio_rt.block_on($service_fn(args));
+            match res{
+                Ok(res)=>{res.into_bytes(st)},
+                Err(e)=>{e.into()}
+            }
         };
         $rpc_server.register_fn(
             $service_path.to_string(),
