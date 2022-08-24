@@ -1,7 +1,7 @@
 use std::{
     boxed::Box,
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock}, borrow::BorrowMut,
 };
 
 use std::net::SocketAddr;
@@ -16,22 +16,19 @@ use std::{
 use std::os::unix::io::{AsRawFd, RawFd};
 
 #[cfg(target_os = "windows")]
-use std::os::windows::io::{AsRawSocket,RawSocket};
+use std::os::windows::io::{AsRawSocket, RawSocket};
 
 #[cfg(target_os = "windows")]
-type RawFd=RawSocket;
+type RawFd = RawSocket;
 
-use std::{
-    thread
-};
+use std::thread;
 
 use scoped_threadpool::Pool;
 
 pub mod plugin;
 pub use plugin::*;
 
-pub type RpcxFn =  fn(&[u8], SerializeType) -> Result<Vec<u8>>;
-
+pub type RpcxFn = fn(&[u8], SerializeType) -> Result<Vec<u8>>;
 
 pub struct Server {
     pub addr: String,
@@ -139,7 +136,7 @@ impl Server {
         let listener = TcpListener::bind(&addr)?;
         println!("Listening on: {}", addr);
         self.raw_fd = Some(listener.as_raw_fd());
-        println!("{}",self.raw_fd);
+        println!("{}", self.raw_fd);
         self.start_with_listener(listener)
     }
 
@@ -180,10 +177,11 @@ impl Server {
                             }
                             None => {
                                 let err = format!("service {} not found", key);
-                                let reply_msg = msg.get_reply().unwrap();
+                                let mut reply_msg = msg.get_reply().unwrap();
                                 let mut metadata = reply_msg.metadata.borrow_mut();
                                 (*metadata).insert(SERVICE_ERROR.to_string(), err);
                                 drop(metadata);
+                                reply_msg.set_message_status_type(MessageStatusType::Error);
                                 let data = reply_msg.encode();
                                 let mut writer = BufWriter::new(local_stream.try_clone().unwrap());
                                 writer.write_all(&data).unwrap();
@@ -215,11 +213,23 @@ impl Server {
 
 fn invoke_fn(stream: TcpStream, msg: Message, f: RpcxFn) {
     let mut reply_msg = msg.get_reply().unwrap();
-    let reply = f(&msg.payload, msg.get_serialize_type().unwrap()).unwrap();
-    reply_msg.payload = reply;
+    let res = f(&msg.payload, msg.get_serialize_type().unwrap());
+    match res {
+        Ok(reply) => {
+            reply_msg.payload = reply;
+        }
+        Err(err) => {
+            let mut metadata = reply_msg.metadata.borrow_mut();
+            (*metadata).insert(SERVICE_ERROR.to_string(), err.to_string());
+            drop(metadata);
+            reply_msg.set_message_status_type(MessageStatusType::Error);
+        }
+    }
+
     let data = reply_msg.encode();
 
     let mut writer = BufWriter::new(stream.try_clone().unwrap());
+
     match writer.write_all(&data) {
         Ok(()) => {}
         Err(_err) => {}
@@ -237,8 +247,8 @@ macro_rules! register_func {
             // TODO change ProtoArgs to $arg_typ
             let mut args: $arg_type = Default::default();
             args.from_slice(st, x)?;
-            let reply: $reply_type=$tokio_rt.block_on($service_fn(args));
-            reply.into_bytes(st)
+            let res = $tokio_rt.block_on($service_fn(args))?;
+            res.into_bytes(st)
         };
         $rpc_server.register_fn(
             $service_path.to_string(),
