@@ -56,7 +56,7 @@ pub struct Client {
     addr: String,
     stream: Option<TcpStream>,
     seq: Arc<AtomicU64>,
-    chan_sender: Sender<RpcData>,
+    chan_sender: Arc<Sender<RpcData>>,
     chan_receiver: Arc<Mutex<Receiver<RpcData>>>,
     calls: Arc<Mutex<HashMap<u64, ArcCall>>>,
 }
@@ -70,7 +70,7 @@ impl Client {
             addr: String::from(addr),
             stream: None,
             seq: Arc::new(AtomicU64::new(0)),
-            chan_sender: sender,
+            chan_sender: Arc::new(sender),
             chan_receiver: Arc::new(Mutex::new(receiver)),
             calls: Arc::new(Mutex::new(HashMap::new())),
         }
