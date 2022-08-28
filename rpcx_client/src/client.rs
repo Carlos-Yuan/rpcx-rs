@@ -6,7 +6,7 @@ use std::{
     net::{Shutdown, SocketAddr, TcpStream},
     sync::{
         atomic::{AtomicU64, Ordering},
-        mpsc::{self, Receiver, SendError, Sender},
+        mpsc::{self, Receiver, SendError, SyncSender},
         Arc, Mutex,
     },
     thread,
@@ -33,13 +33,20 @@ impl Default for Opt {
         Opt {
             retry: 3,
             compress_type: CompressType::CompressNone,
-            serialize_type: SerializeType::JSON,
+            serialize_type: SerializeType::MsgPack,
             connect_timeout: Default::default(),
             read_timeout: Default::default(),
             write_timeout: Default::default(),
             nodelay: None,
             ttl: None,
         }
+    }
+}
+
+impl Opt {
+    pub fn set_serialize_type(&mut self,typ:SerializeType)->&Self{
+        self.serialize_type=typ;
+        self
     }
 }
 
@@ -56,24 +63,26 @@ pub struct Client {
     addr: String,
     stream: Option<TcpStream>,
     seq: Arc<AtomicU64>,
-    chan_sender: Arc<Sender<RpcData>>,
+    chan_sender: SyncSender<RpcData>,
     chan_receiver: Arc<Mutex<Receiver<RpcData>>>,
     calls: Arc<Mutex<HashMap<u64, ArcCall>>>,
 }
 
 impl Client {
-    pub fn new(addr: &str) -> Client {
-        let (sender, receiver) = mpsc::channel();
+    pub fn new(addr: &str,opt:Opt) -> Client {
+        let (sender, receiver) = mpsc::sync_channel(0);
 
-        Client {
-            opt: Default::default(),
+        let mut c=Client {
+            opt,
             addr: String::from(addr),
             stream: None,
             seq: Arc::new(AtomicU64::new(0)),
-            chan_sender: Arc::new(sender),
+            chan_sender: sender,
             chan_receiver: Arc::new(Mutex::new(receiver)),
             calls: Arc::new(Mutex::new(HashMap::new())),
-        }
+        };
+        c.start().unwrap();
+        c
     }
     pub fn start(&mut self) -> Result<()> {
         let stream = if self.opt.connect_timeout.as_millis() == 0 {
