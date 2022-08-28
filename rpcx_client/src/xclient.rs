@@ -85,7 +85,7 @@ impl<S: ClientSelector> XClient<S> {
                     if items.len() == 1 {
                         items.insert(0, "tcp");
                     }
-                    let mut created_client = Client::new(&items[1]);
+                    let mut created_client = Client::new(&items[1],Opt::default());
                     created_client.opt = self.opt;
                     match created_client.start() {
                         Ok(_) => {
